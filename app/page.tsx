@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { AnimatePresence, motion, useInView } from "framer-motion";
-import { ArrowDown, Cpu, Pause, Play, Terminal } from "lucide-react";
+import { ArrowDown, Cpu, Pause, Play, Terminal, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+// --- ANIMATION VARIANTS ---
 const container = {
   hidden: { opacity: 0 },
   show: {
@@ -82,6 +84,7 @@ const heroImages = [
   "/karina3.jpg",
   "/karina4.jpg",
 ];
+
 const trackStagger = {
   hidden: {},
   show: {
@@ -98,6 +101,51 @@ const trackItem = {
     transition: { duration: 0.7, ease: easeSoft },
   },
 };
+
+// --- NEW COMPONENT: INTRO STATIC ---
+function IntroOverlay({ onComplete }: { onComplete: () => void }) {
+  useEffect(() => {
+    // Держим шум 2.2 секунды, потом отключаем
+    const timer = setTimeout(() => {
+      onComplete();
+    }, 2200);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
+
+  return (
+    <motion.div
+      className="tv-static-overlay flex items-center justify-center"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 1.1, filter: "brightness(2)" }}
+      transition={{ duration: 0.8, ease: "easeInOut" }}
+    >
+      <div className="tv-noise" />
+
+      {/* Текст загрузки (опционально) */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 1, 0, 1, 0] }}
+        transition={{ duration: 2, times: [0, 0.1, 0.2, 0.8, 1] }}
+        className="relative z-10 flex flex-col items-center gap-2"
+      >
+        <Zap className="h-12 w-12 text-zinc-100" />
+        <p className="font-mono text-sm uppercase tracking-[0.5em] text-zinc-100">
+          signal_lost
+        </p>
+      </motion.div>
+
+      {/* Горизонтальная полоса (как выключение ТВ) */}
+      <motion.div
+        className="absolute inset-x-0 top-1/2 h-[2px] bg-white mix-blend-difference"
+        initial={{ scaleX: 0, opacity: 0 }}
+        animate={{ scaleX: [0, 1.5, 3], opacity: [0, 1, 0] }}
+        transition={{ duration: 0.3, delay: 2 }}
+      />
+    </motion.div>
+  );
+}
+
+// --- SUB COMPONENTS ---
 
 function GlitchHeader() {
   return (
@@ -485,6 +533,7 @@ function MusicSection({
 }
 
 export default function HomePage() {
+  const [isLoading, setIsLoading] = useState(true); // Состояние загрузки
   const heroRef = useRef<HTMLElement>(null);
   const musicRef = useRef<HTMLElement | null>(null);
   const heroInView = useInView(heroRef, { amount: 0.7 });
@@ -501,12 +550,6 @@ export default function HomePage() {
       media.addEventListener("change", update);
       return () => media.removeEventListener("change", update);
     }
-    const legacyMedia = media as MediaQueryList & {
-      addListener?: (listener: () => void) => void;
-      removeListener?: (listener: () => void) => void;
-    };
-    legacyMedia.addListener?.(update);
-    return () => legacyMedia.removeListener?.(update);
   }, []);
 
   const canAutoScroll = useCallback(() => {
@@ -593,47 +636,65 @@ export default function HomePage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-zinc-950 text-zinc-100">
-      <div className="pointer-events-none absolute -left-24 top-10 h-64 w-64 rounded-full bg-emerald-500/10 blur-[120px]" />
-      <div className="pointer-events-none absolute right-0 top-40 h-80 w-80 rounded-full bg-emerald-500/10 blur-[140px]" />
-      <div className="crt-overlay" aria-hidden="true" />
-      <div className="archive-grain" aria-hidden="true" />
-      <div className="archive-jitter" aria-hidden="true" />
-      <div className="archive-vignette" aria-hidden="true" />
-      <section
-        ref={heroRef}
-        className="relative z-10 flex min-h-screen items-center"
-      >
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="show"
-          className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-16 md:py-24"
-        >
-          <GlitchHeader />
+      {/* ⚠️ ЗАГРУЗКА С ПОМЕХАМИ */}
+      <AnimatePresence>
+        {isLoading && <IntroOverlay onComplete={() => setIsLoading(false)} />}
+      </AnimatePresence>
 
-          <motion.section
-            variants={stack}
-            className="grid gap-8 md:grid-cols-[1.1fr_0.9fr]"
-          >
-            <HeroImage />
-            <div className="flex flex-col gap-6">
-              <CodeBlock />
-              <ActionBtn />
-            </div>
-          </motion.section>
-        </motion.div>
-        <motion.button
-          type="button"
-          onClick={scrollToMusic}
-          className="absolute bottom-20 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-emerald-500/40 bg-zinc-950/70 px-4 py-2 text-xs uppercase tracking-[0.35em] text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] backdrop-blur md:bottom-10"
-          animate={{ y: [0, 8, 0] }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: easeSoft }}
+      {/* Обертка для контента, который будет блюриться под шумом */}
+      <motion.div
+        animate={{
+          filter: isLoading
+            ? "blur(12px) grayscale(100%)"
+            : "blur(0px) grayscale(0%)",
+          scale: isLoading ? 0.98 : 1,
+        }}
+        transition={{ duration: 1.2, ease: "easeOut" }}
+        className="relative z-0"
+      >
+        <div className="pointer-events-none absolute -left-24 top-10 h-64 w-64 rounded-full bg-emerald-500/10 blur-[120px]" />
+        <div className="pointer-events-none absolute right-0 top-40 h-80 w-80 rounded-full bg-emerald-500/10 blur-[140px]" />
+        <div className="crt-overlay" aria-hidden="true" />
+        <div className="archive-grain" aria-hidden="true" />
+        <div className="archive-jitter" aria-hidden="true" />
+        <div className="archive-vignette" aria-hidden="true" />
+
+        <section
+          ref={heroRef}
+          className="relative z-10 flex min-h-screen items-center"
         >
-          <ArrowDown className="h-4 w-4" />
-          scroll
-        </motion.button>
-      </section>
-      <MusicSection sectionRef={musicRef} />
+          <motion.div
+            variants={container}
+            initial="hidden"
+            animate={!isLoading ? "show" : "hidden"} // Запускаем анимацию контента только когда шум ушел
+            className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-16 md:py-24"
+          >
+            <GlitchHeader />
+
+            <motion.section
+              variants={stack}
+              className="grid gap-8 md:grid-cols-[1.1fr_0.9fr]"
+            >
+              <HeroImage />
+              <div className="flex flex-col gap-6">
+                <CodeBlock />
+                <ActionBtn />
+              </div>
+            </motion.section>
+          </motion.div>
+          <motion.button
+            type="button"
+            onClick={scrollToMusic}
+            className="absolute bottom-20 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-emerald-500/40 bg-zinc-950/70 px-4 py-2 text-xs uppercase tracking-[0.35em] text-emerald-300 shadow-[0_0_20px_rgba(16,185,129,0.2)] backdrop-blur md:bottom-10"
+            animate={{ y: [0, 8, 0] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: easeSoft }}
+          >
+            <ArrowDown className="h-4 w-4" />
+            scroll
+          </motion.button>
+        </section>
+        <MusicSection sectionRef={musicRef} />
+      </motion.div>
     </main>
   );
 }
