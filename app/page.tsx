@@ -489,7 +489,25 @@ export default function HomePage() {
   const musicRef = useRef<HTMLElement | null>(null);
   const heroInView = useInView(heroRef, { amount: 0.7 });
   const hasAutoScrolled = useRef(false);
-  const touchStartY = useRef<number | null>(null);
+  const isCoarsePointer = useRef(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(pointer: coarse)");
+    const update = () => {
+      isCoarsePointer.current = media.matches;
+    };
+    update();
+    if ("addEventListener" in media) {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    const legacyMedia = media as MediaQueryList & {
+      addListener?: (listener: () => void) => void;
+      removeListener?: (listener: () => void) => void;
+    };
+    legacyMedia.addListener?.(update);
+    return () => legacyMedia.removeListener?.(update);
+  }, []);
 
   const canAutoScroll = useCallback(() => {
     const heroEl = heroRef.current;
@@ -505,6 +523,11 @@ export default function HomePage() {
       return;
     }
     hasAutoScrolled.current = true;
+    const targetTop = musicRef.current?.offsetTop;
+    if (typeof targetTop === "number") {
+      window.scrollTo({ top: targetTop, behavior: "smooth" });
+      return;
+    }
     musicRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
@@ -515,7 +538,36 @@ export default function HomePage() {
   }, [heroInView]);
 
   useEffect(() => {
+    let scrollIdleTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastScrollY = window.scrollY;
+
+    const handleScroll = () => {
+      if (!isCoarsePointer.current) {
+        return;
+      }
+      const currentY = window.scrollY;
+      const scrollingDown = currentY > lastScrollY + 4;
+      lastScrollY = currentY;
+      if (
+        !heroInView ||
+        hasAutoScrolled.current ||
+        !scrollingDown ||
+        !canAutoScroll()
+      ) {
+        return;
+      }
+      if (scrollIdleTimer) {
+        clearTimeout(scrollIdleTimer);
+      }
+      scrollIdleTimer = setTimeout(() => {
+        scrollToMusic();
+      }, 140);
+    };
+
     const handleWheel = (event: WheelEvent) => {
+      if (isCoarsePointer.current) {
+        return;
+      }
       if (
         !heroInView ||
         hasAutoScrolled.current ||
@@ -528,33 +580,14 @@ export default function HomePage() {
       scrollToMusic();
     };
 
-    const handleTouchStart = (event: TouchEvent) => {
-      touchStartY.current = event.touches[0]?.clientY ?? null;
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      if (!heroInView || hasAutoScrolled.current) {
-        return;
-      }
-      if (!canAutoScroll()) {
-        return;
-      }
-      const currentY = event.touches[0]?.clientY ?? null;
-      if (touchStartY.current === null || currentY === null) {
-        return;
-      }
-      if (touchStartY.current - currentY > 12) {
-        scrollToMusic();
-      }
-    };
-
+    window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("wheel", handleWheel, { passive: false });
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchmove", handleTouchMove, { passive: true });
     return () => {
+      if (scrollIdleTimer) {
+        clearTimeout(scrollIdleTimer);
+      }
+      window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("wheel", handleWheel);
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
     };
   }, [heroInView, scrollToMusic, canAutoScroll]);
 
