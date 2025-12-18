@@ -491,6 +491,15 @@ export default function HomePage() {
   const hasAutoScrolled = useRef(false);
   const touchStartY = useRef<number | null>(null);
 
+  const canAutoScroll = useCallback(() => {
+    const heroEl = heroRef.current;
+    if (!heroEl) {
+      return false;
+    }
+    const rect = heroEl.getBoundingClientRect();
+    return rect.top <= -140;
+  }, []);
+
   const scrollToMusic = useCallback(() => {
     if (hasAutoScrolled.current) {
       return;
@@ -507,7 +516,12 @@ export default function HomePage() {
 
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
-      if (!heroInView || hasAutoScrolled.current || event.deltaY <= 0) {
+      if (
+        !heroInView ||
+        hasAutoScrolled.current ||
+        event.deltaY <= 0 ||
+        !canAutoScroll()
+      ) {
         return;
       }
       event.preventDefault();
@@ -520,6 +534,9 @@ export default function HomePage() {
 
     const handleTouchMove = (event: TouchEvent) => {
       if (!heroInView || hasAutoScrolled.current) {
+        return;
+      }
+      if (!canAutoScroll()) {
         return;
       }
       const currentY = event.touches[0]?.clientY ?? null;
@@ -539,7 +556,7 @@ export default function HomePage() {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [heroInView, scrollToMusic]);
+  }, [heroInView, scrollToMusic, canAutoScroll]);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-zinc-950 text-zinc-100">
