@@ -497,7 +497,7 @@ export default function HomePage() {
       return false;
     }
     const rect = heroEl.getBoundingClientRect();
-    return rect.top <= -140;
+    return rect.top <= -180;
   }, []);
 
   const scrollToMusic = useCallback(() => {
